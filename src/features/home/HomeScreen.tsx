@@ -1,12 +1,16 @@
+import { useState } from 'react';
+import { PILOT_LAST_WEEK, phaseForWeek, proposedDaysForWeek } from '../../domain/plan';
+import { canTrain, clampMinutes, weekdayIndex, WEEKDAY_LONG, WEEKDAY_SHORT, type Profile } from '../../domain/profile';
 import { formatRange } from '../../domain/rpe';
-import { MAX_SESSION_MINUTES, MIN_SESSION_MINUTES, phaseForWeek, PILOT_LAST_WEEK, proposedDaysForWeek } from '../../domain/plan';
 import { allowedOffset, shiftWithin } from '../../domain/session';
 import type { SessionRecord } from '../../domain/storage';
 import { playPromptChime, unlockSound } from '../../lib/sound';
 
 interface Props {
+  profile: Profile;
   week: number;
-  onWeek: (week: number) => void;
+  weekOverride: number | null;
+  onWeekOverride: (week: number | null) => void;
   minutes: number;
   onMinutes: (minutes: number) => void;
   speed: number;
@@ -15,15 +19,8 @@ interface Props {
   onResetOffset: () => void;
   history: SessionRecord[];
   onStart: () => void;
-}
-
-/** Colores de la barra de duración del plan de negocio. */
-function durationLevel(minutes: number): { tone: string; label: string } {
-  if (minutes < 20) return { tone: 'red', label: 'Poco tiempo' };
-  if (minutes < 30) return { tone: 'yellow', label: 'Algo corto' };
-  if (minutes < 40) return { tone: 'green', label: 'Bien' };
-  if (minutes < 60) return { tone: 'silver', label: 'Muy bien' };
-  return { tone: 'gold', label: 'Excelente' };
+  onClearance: () => void;
+  onRestartOnboarding: () => void;
 }
 
 const SPEEDS = [
@@ -32,12 +29,27 @@ const SPEEDS = [
   { value: 60, label: '×60' },
 ];
 
+/** Lunes de la semana de `date`, a las 00:00. */
+function mondayOf(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - weekdayIndex(d));
+  return d;
+}
+
 export function HomeScreen(props: Props) {
-  const { week, minutes, speed, personalOffset, history } = props;
+  const { profile, week, minutes, speed, personalOffset, history } = props;
+  const [now] = useState(() => new Date());
   const phase = phaseForWeek(week);
-  const offset = allowedOffset(phase, personalOffset);
-  const zone = shiftWithin(phase.target, offset, phase.limits);
-  const level = durationLevel(minutes);
+  const zone = shiftWithin(phase.target, allowedOffset(phase, personalOffset), phase.limits);
+  const today = weekdayIndex(now);
+  const isTrainingDay = profile.weekdays.includes(today);
+  const nextDay = [1, 2, 3, 4, 5, 6, 7].map((n) => (today + n) % 7).find((d) => profile.weekdays.includes(d));
+  const monday = mondayOf(now);
+  const doneThisWeek = new Set(
+    history.filter((h) => new Date(h.date) >= monday).map((h) => weekdayIndex(new Date(h.date))),
+  );
+  const allowed = canTrain(profile);
 
   return (
     <main className="home">
@@ -45,72 +57,70 @@ export function HomeScreen(props: Props) {
         <Logo />
         <div>
           <p className="home__brand">Pauta</p>
-          <p className="home__sub">Prototipo de la sesión guiada de aeróbico</p>
+          <p className="home__sub">Consulta {profile.clinicCode}</p>
         </div>
       </header>
 
+      {!allowed && (
+        <section className="card card--warn">
+          <p className="phase-line">Pendiente del visto bueno de tu consulta</p>
+          <p className="phase-detail">
+            Por tus respuestas al cuestionario de salud, tu consulta tiene que revisar tu caso antes de que empieces. Te avisaremos cuando puedas empezar.
+          </p>
+          <button type="button" className="btn btn--secondary btn--block" onClick={props.onClearance}>
+            Simular el visto bueno (solo en el prototipo)
+          </button>
+        </section>
+      )}
+
       <section className="card">
+        <p className="today__kicker">{isTrainingDay ? 'Hoy toca sesión' : 'Hoy es día de descanso'}</p>
+        <p className="phase-line">
+          Semana {week}. {phase.name}
+        </p>
+        <p className="phase-detail">
+          {isTrainingDay
+            ? `${minutes} minutos de ${profile.protocol === 'strength' ? 'ejercicio' : profile.activity.toLowerCase()} a un esfuerzo de ${formatRange(zone)} sobre 10.`
+            : nextDay !== undefined
+              ? `Tu próxima sesión es el ${WEEKDAY_LONG[nextDay]}${profile.time ? ` a las ${profile.time}` : ''}. Si te apetece, puedes hacer una sesión extra.`
+              : ''}
+        </p>
+        {profile.planMode === 'recommended' && (
+          <p className="phase-detail">Propuesta para esta semana: {proposedDaysForWeek(week)} días.</p>
+        )}
+
+        <div className="week-strip" aria-label="Esta semana">
+          {WEEKDAY_SHORT.map((d, i) => {
+            const planned = profile.weekdays.includes(i);
+            const done = doneThisWeek.has(i);
+            return (
+              <div key={d} className={`week-strip__day${planned ? ' is-planned' : ''}${done ? ' is-done' : ''}${i === today ? ' is-today' : ''}`}>
+                <span>{d}</span>
+                <span className="week-strip__mark" aria-label={done ? 'hecha' : planned ? 'prevista' : 'descanso'}>
+                  {done ? '✓' : planned ? '•' : ''}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
         <div className="field">
-          <span className="field__label" id="week-label">Semana del plan</span>
-          <div className="stepper" role="group" aria-labelledby="week-label">
-            <button type="button" className="stepper__btn" onClick={() => props.onWeek(Math.max(1, week - 1))} aria-label="Semana anterior" disabled={week <= 1}>
+          <span className="field__label">Duración de hoy</span>
+          <div className="stepper">
+            <button type="button" className="stepper__btn" onClick={() => props.onMinutes(clampMinutes(minutes - 5))} aria-label="5 minutos menos">
               −
             </button>
-            <span className="stepper__value">{week}</span>
-            <button type="button" className="stepper__btn" onClick={() => props.onWeek(Math.min(PILOT_LAST_WEEK, week + 1))} aria-label="Semana siguiente" disabled={week >= PILOT_LAST_WEEK}>
+            <span className="stepper__value stepper__value--wide">{minutes}′</span>
+            <button type="button" className="stepper__btn" onClick={() => props.onMinutes(clampMinutes(minutes + 5))} aria-label="5 minutos más">
               +
             </button>
           </div>
         </div>
-        <p className="phase-line">{phase.name}</p>
-        <p className="phase-detail">
-          Propuesta: {proposedDaysForWeek(week)} días por semana, {phase.proposedMinutes} minutos. Esfuerzo {formatRange(zone)} en la parte principal.
-        </p>
-        {offset !== 0 && (
-          <p className="phase-detail">
-            Incluye tu ajuste personal de {offset > 0 ? '+' : '−'}
-            {Math.abs(offset)}.{' '}
-            <button type="button" className="link-btn" onClick={props.onResetOffset}>
-              Quitar ajuste
-            </button>
-          </p>
-        )}
       </section>
 
-      <section className="card">
-        <label className="field" htmlFor="minutes">
-          <span className="field__label">Duración de hoy</span>
-          <span className="field__value">{minutes} min</span>
-        </label>
-        <input
-          id="minutes"
-          className={`range range--${level.tone}`}
-          type="range"
-          min={MIN_SESSION_MINUTES}
-          max={MAX_SESSION_MINUTES}
-          step={5}
-          value={minutes}
-          onChange={(e) => props.onMinutes(Number(e.target.value))}
-        />
-        <p className={`level level--${level.tone}`}>{level.label}</p>
-        {minutes !== phase.proposedMinutes && (
-          <button type="button" className="link-btn" onClick={() => props.onMinutes(phase.proposedMinutes)}>
-            Usar la propuesta ({phase.proposedMinutes} min)
-          </button>
-        )}
-      </section>
-
-      <section className="card card--quiet">
-        <span className="field__label" id="speed-label">Velocidad de prueba</span>
-        <div className="segmented" role="radiogroup" aria-labelledby="speed-label">
-          {SPEEDS.map((s) => (
-            <button key={s.value} type="button" role="radio" aria-checked={speed === s.value} className={`segmented__opt${speed === s.value ? ' is-on' : ''}`} onClick={() => props.onSpeed(s.value)}>
-              {s.label}
-            </button>
-          ))}
-        </div>
-        <p className="phase-detail">Solo para probar: con ×60, un minuto de sesión dura un segundo y la pregunta de esfuerzo sale cada 5 segundos.</p>
-      </section>
+      {profile.protocol === 'strength' && (
+        <p className="notice notice--quiet">Las sesiones de fuerza llegan en el siguiente paso. De momento la sesión es aeróbica.</p>
+      )}
 
       <p className="phase-detail">
         Cada 5 minutos sonará un aviso para que indiques cómo de duro lo notas. Sube el volumen del móvil.{' '}
@@ -126,13 +136,13 @@ export function HomeScreen(props: Props) {
         </button>
       </p>
 
-      <button type="button" className="btn btn--primary btn--block btn--big" onClick={props.onStart}>
-        Empezar sesión
+      <button type="button" className="btn btn--primary btn--block btn--big" onClick={props.onStart} disabled={!allowed}>
+        {isTrainingDay ? 'Empezar sesión' : 'Hacer una sesión extra'}
       </button>
 
       {history.length > 0 && (
         <section className="history">
-          <h2 className="history__title">Sesiones guardadas</h2>
+          <h2 className="history__title">Sesiones hechas</h2>
           <ul>
             {history.slice(0, 5).map((h) => (
               <li key={h.id}>
@@ -146,6 +156,49 @@ export function HomeScreen(props: Props) {
           </ul>
         </section>
       )}
+
+      <details className="card card--quiet test-options">
+        <summary>Opciones de prueba</summary>
+        <div className="field">
+          <span className="field__label" id="week-label">
+            Semana del plan
+          </span>
+          <div className="stepper" role="group" aria-labelledby="week-label">
+            <button type="button" className="stepper__btn" onClick={() => props.onWeekOverride(Math.max(1, week - 1))} disabled={week <= 1} aria-label="Semana anterior">
+              −
+            </button>
+            <span className="stepper__value">{week}</span>
+            <button type="button" className="stepper__btn" onClick={() => props.onWeekOverride(Math.min(PILOT_LAST_WEEK, week + 1))} disabled={week >= PILOT_LAST_WEEK} aria-label="Semana siguiente">
+              +
+            </button>
+          </div>
+        </div>
+        {props.weekOverride !== null && (
+          <button type="button" className="link-btn" onClick={() => props.onWeekOverride(null)}>
+            Volver a la semana real
+          </button>
+        )}
+        <span className="field__label" id="speed-label">
+          Velocidad de la sesión
+        </span>
+        <div className="segmented" role="radiogroup" aria-labelledby="speed-label">
+          {SPEEDS.map((s) => (
+            <button key={s.value} type="button" role="radio" aria-checked={speed === s.value} className={`segmented__opt${speed === s.value ? ' is-on' : ''}`} onClick={() => props.onSpeed(s.value)}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <p className="phase-detail">Con ×60, un minuto de sesión dura un segundo y la pregunta de esfuerzo sale cada 5 segundos.</p>
+        {personalOffset !== 0 && (
+          <button type="button" className="link-btn" onClick={props.onResetOffset}>
+            Quitar el ajuste personal de intensidad ({personalOffset > 0 ? '+' : '−'}
+            {Math.abs(personalOffset)})
+          </button>
+        )}
+        <button type="button" className="link-btn" onClick={props.onRestartOnboarding}>
+          Volver a hacer el alta
+        </button>
+      </details>
     </main>
   );
 }

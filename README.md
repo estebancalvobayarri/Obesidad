@@ -6,7 +6,7 @@ Nombre e imagen provisionales: **Pauta**.
 
 ## Estado
 
-Paso 1 y 2 del MVP:
+Pasos 1 a 3 del MVP:
 
 - [x] Base del proyecto: React + TypeScript + Vite, instalable en el móvil (manifest + service worker).
 - [x] Sesión guiada de aeróbico:
@@ -17,12 +17,13 @@ Paso 1 y 2 del MVP:
   - aviso sonoro (y vibración en Android) cada vez que toca valorar el esfuerzo; se puede silenciar;
   - pantalla siempre encendida durante la sesión;
   - valoración final (RPE de sesión y sensación de intensidad) y carga (RPE × minutos).
-- [ ] Alta, cuestionario PAR-Q+ y preferencias.
+- [x] Alta: bienvenida con código de la consulta, datos (edad, sexo, altura, peso), cuestionario de cribado (7 preguntas generales del PAR-Q+, adaptación provisional), explicación de la escala RPE, tipo de ejercicio y actividad, preferencias («hazme el mejor plan» o «a mi medida», días, duración y hora) y resumen.
+- [x] Inicio: sesión de hoy o próxima sesión, semana del plan calculada por fechas, días de la semana hechos y previstos, bloqueo hasta el visto bueno si el cribado lo pide.
 - [ ] Inicio con calendario, medallas y test de marcha de 6 minutos.
 - [ ] Sesión de fuerza (estructura provisional y huecos para vídeos).
 - [ ] Supabase y panel de la clínica.
 
-La pantalla de inicio actual es **de prueba**: permite elegir la semana del plan y acelerar el tiempo (×10, ×60) para probar una sesión entera en un minuto.
+En el inicio hay unas **opciones de prueba** (plegadas) para cambiar la semana del plan, acelerar el tiempo (×10, ×60), quitar el ajuste de intensidad o repetir el alta. Mientras no exista el panel de la clínica, el visto bueno médico se simula con un botón.
 
 ## Cómo arrancarlo
 
@@ -45,10 +46,12 @@ src/
     rpe.ts          escala 0-10, descripciones y comparación con la zona objetivo
     plan.ts         fases del piloto (semanas 1-40) en RPE
     session.ts      motor de la sesión: bloques, tiempo, preguntas, ajustes
+    profile.ts      datos del alta, cribado, preferencias y semana del plan
     storage.ts      guardado local provisional (luego Supabase)
-    session.test.ts pruebas
+    *.test.ts       pruebas
   features/
-    home/           inicio (de prueba)
+    onboarding/     alta en 6 pasos
+    home/           inicio con el plan y opciones de prueba
     session/        sesión guiada, escala, selector de RPE y resumen
   lib/
     sound.ts        aviso sonoro de la pregunta de esfuerzo (Web Audio)

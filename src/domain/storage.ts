@@ -1,3 +1,4 @@
+import type { Profile } from './profile';
 import type { Rpe, RpeRange } from './rpe';
 import type { RpeEntry, Adjustment } from './session';
 
@@ -26,15 +27,18 @@ export interface SessionRecord {
 
 export interface StoredData {
   version: 1;
+  /** Datos del alta. Sin perfil, la app muestra el alta. */
+  profile?: Profile;
   /** Ajuste personal («de ahora en adelante») en puntos de RPE. */
   personalOffset: number;
-  week: number;
+  /** Solo para pruebas: fuerza una semana del plan en lugar de calcularla por fechas. */
+  weekOverride: number | null;
   history: SessionRecord[];
 }
 
 const KEY = 'pauta.v1';
 
-export const EMPTY_DATA: StoredData = { version: 1, personalOffset: 0, week: 1, history: [] };
+export const EMPTY_DATA: StoredData = { version: 1, personalOffset: 0, weekOverride: null, history: [] };
 
 export function loadData(): StoredData {
   try {
