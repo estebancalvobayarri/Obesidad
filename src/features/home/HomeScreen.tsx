@@ -2,6 +2,7 @@ import { formatRange } from '../../domain/rpe';
 import { MAX_SESSION_MINUTES, MIN_SESSION_MINUTES, phaseForWeek, PILOT_LAST_WEEK, proposedDaysForWeek } from '../../domain/plan';
 import { allowedOffset, shiftWithin } from '../../domain/session';
 import type { SessionRecord } from '../../domain/storage';
+import { playPromptChime, unlockSound } from '../../lib/sound';
 
 interface Props {
   week: number;
@@ -110,6 +111,20 @@ export function HomeScreen(props: Props) {
         </div>
         <p className="phase-detail">Solo para probar: con ×60, un minuto de sesión dura un segundo y la pregunta de esfuerzo sale cada 5 segundos.</p>
       </section>
+
+      <p className="phase-detail">
+        Cada 5 minutos sonará un aviso para que indiques cómo de duro lo notas. Sube el volumen del móvil.{' '}
+        <button
+          type="button"
+          className="link-btn"
+          onClick={() => {
+            unlockSound();
+            playPromptChime();
+          }}
+        >
+          Probar el sonido
+        </button>
+      </p>
 
       <button type="button" className="btn btn--primary btn--block btn--big" onClick={props.onStart}>
         Empezar sesión

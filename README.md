@@ -14,7 +14,7 @@ Paso 1 y 2 del MVP:
   - pregunta de esfuerzo en pantalla cada 5 minutos, con respuesta inmediata;
   - zona de esfuerzo objetivo sobre la escala 0-10;
   - pausar, y subir o bajar 1-2 puntos «solo hoy» o «de ahora en adelante», dentro de los límites de cada fase;
-  - voz en los cambios de bloque (se puede silenciar);
+  - aviso sonoro (y vibración en Android) cada vez que toca valorar el esfuerzo; se puede silenciar;
   - pantalla siempre encendida durante la sesión;
   - valoración final (RPE de sesión y sensación de intensidad) y carga (RPE × minutos).
 - [ ] Alta, cuestionario PAR-Q+ y preferencias.
@@ -51,7 +51,7 @@ src/
     home/           inicio (de prueba)
     session/        sesión guiada, escala, selector de RPE y resumen
   lib/
-    voice.ts        voz sintetizada del navegador
+    sound.ts        aviso sonoro de la pregunta de esfuerzo (Web Audio)
     wakeLock.ts     mantener la pantalla encendida
 public/             manifest, service worker e iconos
 ```

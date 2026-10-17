@@ -5,7 +5,7 @@ import { loadData, saveData, type StoredData } from './domain/storage';
 import { HomeScreen } from './features/home/HomeScreen';
 import { SessionScreen } from './features/session/SessionScreen';
 import { SummaryScreen } from './features/session/SummaryScreen';
-import { speak, voiceSupported } from './lib/voice';
+import { soundSupported, unlockSound } from './lib/sound';
 
 type Screen = { name: 'home' } | { name: 'session'; session: SessionState } | { name: 'summary'; session: SessionState };
 
@@ -14,7 +14,7 @@ export function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
   const [minutes, setMinutes] = useState(() => phaseForWeek(loadData().week).proposedMinutes);
   const [speed, setSpeed] = useState(1);
-  const [voiceOn, setVoiceOn] = useState(voiceSupported());
+  const [soundOn, setSoundOn] = useState(soundSupported());
 
   useEffect(() => saveData(data), [data]);
 
@@ -24,8 +24,8 @@ export function App() {
   };
 
   const start = () => {
-    // El primer mensaje de voz tiene que salir de un toque del usuario (requisito de iOS).
-    if (voiceOn) speak(' ');
+    // El audio solo se puede activar dentro de un toque del usuario (requisito de iOS).
+    unlockSound();
     const plan = buildAerobicSession(data.week, minutes);
     setScreen({ name: 'session', session: startSession(plan, Date.now(), data.personalOffset, speed) });
   };
@@ -37,8 +37,8 @@ export function App() {
         onChange={(session) => setScreen({ name: 'session', session })}
         onFinish={(session) => setScreen({ name: 'summary', session: finish(session, Date.now()) })}
         onPersonalOffset={(personalOffset) => setData((d) => ({ ...d, personalOffset }))}
-        voiceOn={voiceOn}
-        onToggleVoice={() => setVoiceOn((v) => !v)}
+        soundOn={soundOn}
+        onToggleSound={() => setSoundOn((v) => !v)}
       />
     );
   }

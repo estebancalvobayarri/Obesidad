@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { bandFor, compareToTarget, FEEDBACK_TEXT, formatRange, type Rpe } from '../../domain/rpe';
 import {
   adjustIntensity,
@@ -15,7 +15,7 @@ import {
   type Adjustment,
   type SessionState,
 } from '../../domain/session';
-import { speak, stopSpeaking } from '../../lib/voice';
+import { playPromptChime } from '../../lib/sound';
 import { useWakeLock } from '../../lib/wakeLock';
 import { RpePicker } from './RpePicker';
 import { RpeScale } from './RpeScale';
@@ -26,8 +26,8 @@ interface Props {
   onFinish: (final: SessionState) => void;
   /** Se llama cuando el usuario elige «de ahora en adelante». */
   onPersonalOffset: (offset: number) => void;
-  voiceOn: boolean;
-  onToggleVoice: () => void;
+  soundOn: boolean;
+  onToggleSound: () => void;
 }
 
 type Sheet = { kind: 'none' } | { kind: 'pause' } | { kind: 'adjust'; direction: 1 | -1 } | { kind: 'scope'; delta: number };
@@ -46,26 +46,10 @@ function useNow(intervalMs: number): number {
   return now;
 }
 
-function segmentAnnouncement(session: SessionState, index: number): string {
-  const seg = session.plan.segments[index];
-  const minutes = Math.round(seg.seconds / 60);
-  const target = targetFor(session, seg);
-  const band = bandFor(target[0]);
-  const effort = `esfuerzo ${formatRange(target).replace(' a ', ' o ')}`;
-  if (seg.kind === 'warmup') {
-    return `Empezamos. ${minutes} minutos de calentamiento a ${effort}: muy suave.`;
-  }
-  if (seg.kind === 'main') {
-    return `Parte principal: ${minutes} minutos a ${effort}. ${band.talkTest}.`;
-  }
-  return `Vuelta a la calma: ${minutes} minutos, muy suave. Lo estás haciendo muy bien.`;
-}
-
-export function SessionScreen({ session, onChange, onFinish, onPersonalOffset, voiceOn, onToggleVoice }: Props) {
+export function SessionScreen({ session, onChange, onFinish, onPersonalOffset, soundOn, onToggleSound }: Props) {
   const now = useNow(250);
   const [sheet, setSheet] = useState<Sheet>({ kind: 'none' });
   const [feedback, setFeedback] = useState<string | null>(null);
-  const spokenIndex = useRef(-1);
   const paused = session.pausedAt !== null;
 
   useWakeLock(!paused);
@@ -79,23 +63,15 @@ export function SessionScreen({ session, onChange, onFinish, onPersonalOffset, v
 
   // Fin automático.
   useEffect(() => {
-    if (pos.done) {
-      if (voiceOn) speak('Sesión terminada. ¡Buen trabajo!');
-      onFinish(session);
-    }
+    if (pos.done) onFinish(session);
   }, [pos.done]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Voz en cada cambio de bloque.
+  // Aviso sonoro (y vibración en Android) cuando toca valorar el esfuerzo.
   useEffect(() => {
-    if (pos.done || spokenIndex.current === pos.index) return;
-    spokenIndex.current = pos.index;
-    if (voiceOn) speak(segmentAnnouncement(session, pos.index));
-  }, [pos.index, pos.done]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Aviso suave al aparecer la pregunta de esfuerzo (solo vibración; la pregunta es en pantalla).
-  useEffect(() => {
-    if (promptDue) navigator.vibrate?.(200);
-  }, [promptDue]);
+    if (!promptDue) return;
+    if (soundOn) playPromptChime();
+    navigator.vibrate?.([200, 100, 200]);
+  }, [promptDue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!feedback) return;
@@ -110,7 +86,6 @@ export function SessionScreen({ session, onChange, onFinish, onPersonalOffset, v
 
   const openPause = () => {
     onChange(pause(session, Date.now()));
-    stopSpeaking();
     setSheet({ kind: 'pause' });
   };
 
@@ -137,8 +112,8 @@ export function SessionScreen({ session, onChange, onFinish, onPersonalOffset, v
           <p className="session__phase">{session.plan.phase.name}</p>
           <h1 className="session__segment">{pos.segment.title}</h1>
         </div>
-        <button type="button" className="icon-btn" onClick={onToggleVoice} aria-pressed={voiceOn} aria-label={voiceOn ? 'Silenciar la voz' : 'Activar la voz'}>
-          {voiceOn ? <SpeakerIcon /> : <SpeakerOffIcon />}
+        <button type="button" className="icon-btn" onClick={onToggleSound} aria-pressed={soundOn} aria-label={soundOn ? 'Silenciar el aviso sonoro' : 'Activar el aviso sonoro'}>
+          {soundOn ? <SpeakerIcon /> : <SpeakerOffIcon />}
         </button>
       </header>
 
